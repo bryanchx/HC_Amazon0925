@@ -1,38 +1,29 @@
-import itchat
-import tkinter as tk
-from tkinter import scrolledtext
+import openai
 
-class WeChatApp:
-    def __init__(self, master):
-        self.master = master
-        master.title("微信聊天")
+# 设置API密钥
+openai.api_key = "your-api-key"
 
-        self.text_area = scrolledtext.ScrolledText(master, wrap=tk.WORD, width=50, height=20)
-        self.text_area.pack(padx=10, pady=10)
 
-        self.entry = tk.Entry(master, width=50)
-        self.entry.pack(padx=10, pady=10)
-        self.entry.bind("<Return>", self.send_message)
+def generate_amazon_title(product_description):
+    # 使用OpenAI的ChatCompletion API生成标题
+    response = openai.ChatCompletion.create(
+        model="gpt-4",  # 使用 GPT-4 模型（你可以根据需要选择 gpt-3.5-turbo）
+        messages=[
+            {"role": "system",
+             "content": "You are a helpful assistant specialized in generating optimized Amazon product titles."},
+            {"role": "user",
+             "content": f"Create an Amazon product title based on this description: {product_description}"}
+        ],
+        max_tokens=60,  # 控制生成的标题长度
+        temperature=0.7  # 控制生成结果的随机性
+    )
 
-        self.send_button = tk.Button(master, text="发送", command=self.send_message)
-        self.send_button.pack(padx=10, pady=10)
+    # 提取生成的标题
+    title = response['choices'][0]['message']['content'].strip()
+    return title
 
-        self.text_area.insert(tk.END, "登录微信...\n")
-        itchat.auto_login(hotReload=False)  # 设置为 False
-        itchat.run(blockThread=False)
-        itchat.msg_register(itchat.content.TEXT)(self.receive_message)
 
-    def send_message(self, event=None):
-        message = self.entry.get()
-        if message:
-            self.text_area.insert(tk.END, f"发送: {message}\n")
-            itchat.send(message, toUserName='filehelper')
-            self.entry.delete(0, tk.END)
-
-    def receive_message(self, msg):
-        self.text_area.insert(tk.END, f"收到: {msg.text}\n")
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = WeChatApp(root)
-    root.mainloop()
+# 示例：生成亚马逊标题
+product_description = "This is a lightweight, waterproof hiking backpack with a 30L capacity, suitable for both men and women, designed for outdoor activities such as camping and trekking."
+title = generate_amazon_title(product_description)
+print("Generated Amazon Title:", title)
