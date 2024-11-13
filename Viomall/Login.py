@@ -1,10 +1,13 @@
 import os
 import time
 import random
+from enum import Enum
 
 import pandas as pd
 import requests
-import json
+
+from Viomall.HunterSellSkuFirstOrderPageList import HunterSellSkuFirstOrderPageList
+
 
 # 登录
 def login(username, password):
@@ -63,7 +66,6 @@ def get_amazon_listing(session, page, pageSize):
         print("响应内容:", response.text)
         return None
 
-
 # 获取 Api刊登工具 里面的SKU列表
 def get_amazon_listing_product_list(session, product_id, page=1, page_size=10):
     url = f"https://dms.viomall.com/v3/amazonListing/getAmazonListingBatchProductList.do?id={product_id}"
@@ -91,6 +93,10 @@ def get_amazon_listing_product_list(session, product_id, page=1, page_size=10):
         print("响应内容:", response.text)
         return None
 
+# 定义一个枚举类
+class RequestType(Enum):
+    WeiShangJia = 1
+    ShangJinShouDan = 2
 
 # 主程序
 if __name__ == "__main__":
@@ -99,73 +105,80 @@ if __name__ == "__main__":
 
     # 登录并获取会话对象
     session = login(username, password)
+    request_type = RequestType.ShangJinShouDan
 
     if session:
-        # 使用登录的会话请求其他接口
-        complete_api_list = get_amazon_listing(session, 1, 150)
-        if complete_api_list:  # 确保有数据
-            # 解析返回结果
-            if complete_api_list['success']:
-                # 提取 pagination 信息
-                pagination = complete_api_list['value']['pagination']
-                current_page = pagination['current']
-                page_size = pagination['pageSize']
-                total = pagination['total']
+        if request_type == RequestType.WeiShangJia:
+            # 使用登录的会话请求其他接口
+            complete_api_list = get_amazon_listing(session, 1, 150)
+            if complete_api_list:  # 确保有数据
+                # 解析返回结果
+                if complete_api_list['success']:
+                    # 提取 pagination 信息
+                    pagination = complete_api_list['value']['pagination']
+                    current_page = pagination['current']
+                    page_size = pagination['pageSize']
+                    total = pagination['total']
 
-                print(f"当前页: {current_page}, 每页大小: {page_size}, 总数: {total}")
+                    print(f"当前页: {current_page}, 每页大小: {page_size}, 总数: {total}")
 
-                # 提取数据列表
-                listings = complete_api_list['value']['data']
-                for listing in listings:
+                    # 提取数据列表
+                    listings = complete_api_list['value']['data']
+                    for listing in listings:
 
-                    org_id = listing['orgId']
-                    item_id = listing['id']
-                    title = listing['title']
-                    print(f"ID: {item_id}, Org ID: {org_id}, 标题: {title}")
-                    listing_product_list = get_amazon_listing_product_list(session, item_id, 1, 1000)
+                        org_id = listing['orgId']
+                        item_id = listing['id']
+                        title = listing['title']
+                        print(f"ID: {item_id}, Org ID: {org_id}, 标题: {title}")
+                        listing_product_list = get_amazon_listing_product_list(session, item_id, 1, 1000)
 
-                    if listing_product_list and listing_product_list['success']:
-                        # 提取 productSku
-                        product_skus = [item['productSku'] for item in listing_product_list['value']['data']]
-                        print("product_skus=",product_skus)
+                        if listing_product_list and listing_product_list['success']:
+                            # 提取 productSku
+                            product_skus = [item['productSku'] for item in listing_product_list['value']['data']]
+                            print("product_skus=",product_skus)
 
-                        # 创建 DataFrame
-                        df = pd.DataFrame(product_skus, columns=['productSku'])
+                            # Excel 文件的路径
+                            excel_file = 'product_skus.xlsx'
 
-                        # Excel 文件的路径
-                        excel_file = 'product_skus.xlsx'
+                            # 提取 productSku 的数据
+                            product_skus = [item['productSku'] for item in listing_product_list['value']['data']]
+                            df_new = pd.DataFrame(product_skus, columns=['productSku'])
 
-                        # 提取 productSku 的数据
-                        product_skus = [item['productSku'] for item in listing_product_list['value']['data']]
-                        df_new = pd.DataFrame(product_skus, columns=['productSku'])
+                            # 检查文件是否存在
+                            file_exists = os.path.exists(excel_file)
 
-                        # 检查文件是否存在
-                        file_exists = os.path.exists(excel_file)
+                            if file_exists:
+                                # 如果文件存在，读取现有数据
+                                df_existing = pd.read_excel(excel_file, sheet_name='ProductSKUs')
 
-                        if file_exists:
-                            # 如果文件存在，读取现有数据
-                            df_existing = pd.read_excel(excel_file, sheet_name='ProductSKUs')
+                                # 合并现有数据和新数据
+                                df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+                            else:
+                                # 如果文件不存在，直接使用新数据
+                                df_combined = df_new
 
-                            # 合并现有数据和新数据
-                            df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+                            # 将合并后的数据写入到 Excel
+                            with pd.ExcelWriter(excel_file, mode='w', engine='openpyxl') as writer:
+                                df_combined.to_excel(writer, index=False, header=True, sheet_name='ProductSKUs')
+
+                            print("productSku 已成功追加到 Excel 文件！")
+
+                            # 随机休息 5 到 15 秒
+                            sleep_time = random.randint(5, 15)
+                            print(f"休息 {sleep_time} 秒...")
+                            time.sleep(sleep_time)
+
+                            print("休息的时间是", sleep_time, "S")
+
                         else:
-                            # 如果文件不存在，直接使用新数据
-                            df_combined = df_new
+                            print("没有获取到有效的产品列表。")
+                else:
+                    print("请求失败，未能获取数据。")
 
-                        # 将合并后的数据写入到 Excel
-                        with pd.ExcelWriter(excel_file, mode='w', engine='openpyxl') as writer:
-                            df_combined.to_excel(writer, index=False, header=True, sheet_name='ProductSKUs')
+        elif request_type == RequestType.ShangJinShouDan:
+            # 创建 ProductSkuFetcher 类的实例
+            sku_fetcher = HunterSellSkuFirstOrderPageList(session, page=1, page_size=100,
+                                                          file_name='hunter_product_skus.xlsx')
 
-                        print("productSku 已成功追加到 Excel 文件！")
-
-                        # 随机休息 5 到 15 秒
-                        sleep_time = random.randint(5, 15)
-                        print(f"休息 {sleep_time} 秒...")
-                        time.sleep(sleep_time)
-
-                        print("休息的时间是", sleep_time, "S")
-
-                    else:
-                        print("没有获取到有效的产品列表。")
-            else:
-                print("请求失败，未能获取数据。")
+            # 调用方法来获取并保存所有产品SKU
+            sku_fetcher.fetch_and_save_all_skus()
