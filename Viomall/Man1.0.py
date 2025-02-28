@@ -105,7 +105,7 @@ if __name__ == "__main__":
 
     # 登录并获取会话对象
     session = login(username, password)
-    request_type = RequestType.ShangJinShouDan
+    request_type = RequestType.WeiShangJia
 
     if session:
         if request_type == RequestType.WeiShangJia:
